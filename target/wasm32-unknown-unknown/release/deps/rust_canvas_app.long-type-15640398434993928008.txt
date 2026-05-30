@@ -1,0 +1,3 @@
+once_cell::imp::OnceCell<std::sync::Mutex<Rc<RefCell<AppState>>>>
+once_cell::sync::OnceCell<std::sync::Mutex<Rc<RefCell<AppState>>>>
+once_cell::sync::Lazy<std::sync::Mutex<Rc<RefCell<AppState>>>>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust WebAssembly Canvas</title>
+    <style>
+        body {
+            background-color: #1e1e1e; /* Dark background like Figma */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        canvas {
+            background-color: #2c2c2c; /* Canvas background */
+            border: 1px solid #444;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="controls" style="margin-bottom: 20px; color: white; background: #333; padding: 10px; border-radius: 5px;">
+        <label>Color: <input type="color" id="colorPicker" value="#E0E0E0"></label>
+        <label>Text: <input type="text" id="textInput" value="" style="width: 100px;"></label>
+        <label>Text Size: <input type="number" id="fontSizeInput" value="20" style="width: 50px;"></label>
+        <span style="margin-left: 20px;">Canvas: </span>
+        <label>W: <input type="number" id="canvasWidth" value="800" style="width: 60px;"></label>
+        <label>H: <input type="number" id="canvasHeight" value="600" style="width: 60px;"></label>
+    </div>
+
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <script type="module">
+        import init, { 
+            set_selected_color, 
+            set_selected_font_size, 
+            set_selected_text,
+            resize_canvas,
+            get_selected_color,
+            get_selected_text,
+            get_selected_font_size
+        } from './pkg/rust_canvas_app.js';
+
+        async function run() {
+            await init();
+
+            const colorPicker = document.getElementById('colorPicker');
+            const textInput = document.getElementById('textInput');
+            const fontSizeInput = document.getElementById('fontSizeInput');
+            const canvasWidth = document.getElementById('canvasWidth');
+            const canvasHeight = document.getElementById('canvasHeight');
+            const canvas = document.getElementById('canvas');
+
+            colorPicker.addEventListener('input', (e) => {
+                set_selected_color(e.target.value);
+            });
+
+            textInput.addEventListener('input', (e) => {
+                set_selected_text(e.target.value);
+            });
+
+            fontSizeInput.addEventListener('input', (e) => {
+                set_selected_font_size(parseFloat(e.target.value));
+            });
+
+            const updateSize = () => {
+                resize_canvas(parseFloat(canvasWidth.value), parseFloat(canvasHeight.value));
+            };
+
+            canvasWidth.addEventListener('input', updateSize);
+            canvasHeight.addEventListener('input', updateSize);
+
+            // Periodically sync UI controls with selected shape (or on click)
+            const syncControls = () => {
+                colorPicker.value = get_selected_color();
+                textInput.value = get_selected_text();
+                fontSizeInput.value = get_selected_font_size();
+            };
+
+            canvas.addEventListener('mousedown', () => {
+                // Wait a bit for Rust to update state
+                setTimeout(syncControls, 10);
+            });
+        }
+
+        run();
+    </script>
+</body>
+</html>
