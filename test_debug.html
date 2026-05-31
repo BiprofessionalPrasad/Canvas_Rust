@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Debug Test</title>
+    <style>
+        body {
+            background-color: #1e1e1e;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            font-family: monospace;
+            color: white;
+        }
+        canvas {
+            background-color: #2c2c2c;
+            border: 1px solid #444;
+            cursor: crosshair;
+        }
+        #debug {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 10px;
+            border: 1px solid #00ff00;
+            font-family: monospace;
+            font-size: 12px;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div id="debug">Debug Console:<br></div>
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <script type="module">
+        import init from './pkg/rust_canvas_app.js';
+
+        const debugEl = document.getElementById('debug');
+
+        function log(msg) {
+            console.log(msg);
+            debugEl.innerHTML += msg + '<br>';
+            debugEl.scrollTop = debugEl.scrollHeight;
+        }
+
+        window.log = log;
+
+        async function run() {
+            try {
+                await init();
+                log('✓ WASM initialized');
+
+                const canvas = document.getElementById('canvas');
+
+                // Add event listeners to debug
+                canvas.addEventListener('click', (e) => {
+                    log(`Click at: x=${e.offsetX}, y=${e.offsetY}`);
+                });
+
+                canvas.addEventListener('mousedown', (e) => {
+                    log(`MouseDown at: x=${e.offsetX}, y=${e.offsetY}`);
+                });
+
+                // Test shape creation
+                log('Instructions:');
+                log('1. Click "Rect" tool to draw rectangle');
+                log('2. Draw a rectangle');
+                log('3. Click "Select" tool');
+                log('4. Click on rectangle to select');
+                log('');
+
+            } catch (error) {
+                log('✗ Error: ' + error);
+                console.error(error);
+            }
+        }
+
+        run();
+    </script>
+</body>
+</html>

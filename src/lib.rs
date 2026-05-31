@@ -109,7 +109,7 @@ fn validate_font_size(size: f64) -> Result<(), AppError> {
 }
 
 fn validate_mouse_position(x: f64, y: f64, canvas_width: f64, canvas_height: f64) -> Result<(), AppError> {
-    if x < 0.0 || x > canvas_width || y < TOOLBAR_HEIGHT || y > canvas_height || x.is_nan() || y.is_nan() {
+    if x < 0.0 || x > canvas_width || y < 0.0 || y > canvas_height || x.is_nan() || y.is_nan() {
         return Err(AppError::MouseOutOfBounds { x, y });
     }
     Ok(())
@@ -676,12 +676,12 @@ mod tests {
     fn test_validate_mouse_position() {
         // Valid positions
         assert!(validate_mouse_position(400.0, 300.0, 800.0, 600.0).is_ok());
-        assert!(validate_mouse_position(0.0, 50.0, 800.0, 600.0).is_ok());
+        assert!(validate_mouse_position(0.0, 0.0, 800.0, 600.0).is_ok());
         assert!(validate_mouse_position(800.0, 600.0, 800.0, 600.0).is_ok());
 
         // Out of bounds
         assert!(validate_mouse_position(-10.0, 300.0, 800.0, 600.0).is_err());
-        assert!(validate_mouse_position(400.0, 30.0, 800.0, 600.0).is_err()); // In toolbar
+        assert!(validate_mouse_position(400.0, -10.0, 800.0, 600.0).is_err());
         assert!(validate_mouse_position(400.0, 650.0, 800.0, 600.0).is_err());
 
         // NaN values
