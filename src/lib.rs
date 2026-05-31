@@ -6,6 +6,9 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
 
+mod errors;
+pub use errors::{AppError, update_status};
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Tool {
     Select,
@@ -16,7 +19,7 @@ pub enum Tool {
     Delete,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ShapeType {
     Rectangle,
     Circle,
@@ -74,6 +77,75 @@ impl AppState {
     }
 }
 
+// Input validation functions
+fn validate_canvas_dimensions(width: f64, height: f64) -> Result<(), AppError> {
+    const MIN_DIMENSION: f64 = 100.0;
+    const MAX_DIMENSION: f64 = 10000.0;
+
+    if width < MIN_DIMENSION || height < MIN_DIMENSION || width.is_nan() || height.is_nan() {
+        return Err(AppError::InvalidDimensions { width, height });
+    }
+
+    if width > MAX_DIMENSION || height > MAX_DIMENSION {
+        return Err(AppError::InvalidDimensions { width, height });
+    }
+
+    Ok(())
+}
+
+fn validate_font_size(size: f64) -> Result<(), AppError> {
+    const MIN_FONT_SIZE: f64 = 6.0;
+    const MAX_FONT_SIZE: f64 = 72.0;
+
+    if size < MIN_FONT_SIZE || size > MAX_FONT_SIZE || size.is_nan() {
+        return Err(AppError::InvalidFontSize {
+            size,
+            min: MIN_FONT_SIZE,
+            max: MAX_FONT_SIZE
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_mouse_position(x: f64, y: f64, canvas_width: f64, canvas_height: f64) -> Result<(), AppError> {
+    if x < 0.0 || x > canvas_width || y < TOOLBAR_HEIGHT || y > canvas_height || x.is_nan() || y.is_nan() {
+        return Err(AppError::MouseOutOfBounds { x, y });
+    }
+    Ok(())
+}
+
+fn validate_color(color: &str) -> Result<(), AppError> {
+    // Basic hex color validation
+    if !color.starts_with('#') || color.len() != 7 {
+        return Err(AppError::InvalidColor { color: color.to_string() });
+    }
+
+    // Check if hex characters are valid
+    for c in color.chars().skip(1) {
+        if !c.is_ascii_hexdigit() {
+            return Err(AppError::InvalidColor { color: color.to_string() });
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_text(text: &str) -> Result<(), AppError> {
+    if text.len() > 1000 {
+        return Err(AppError::InvalidText { reason: "Text too long (max 1000 characters)".to_string() });
+    }
+
+    // Check for control characters (except common whitespace)
+    for c in text.chars() {
+        if c.is_control() && c != '\t' && c != '\n' && c != '\r' {
+            return Err(AppError::InvalidText { reason: "Text contains invalid characters".to_string() });
+        }
+    }
+
+    Ok(())
+}
+
 // Global thread-safe state
 static APP_STATE: Lazy<Arc<Mutex<AppState>>> = Lazy::new(|| {
     Arc::new(Mutex::new(AppState::new()))
@@ -83,38 +155,50 @@ const TOOLBAR_HEIGHT: f64 = 50.0;
 const BUTTON_WIDTH: f64 = 80.0;
 
 #[wasm_bindgen]
-pub fn set_selected_color(color: String) {
+pub fn set_selected_color(color: String) -> Result<(), JsValue> {
+    validate_color(&color)?;
+
     if let Ok(mut s) = APP_STATE.lock() {
         if let Some(idx) = s.selected_index {
             s.shapes[idx].color = color;
         }
     }
+    Ok(())
 }
 
 #[wasm_bindgen]
-pub fn set_selected_font_size(size: f64) {
+pub fn set_selected_font_size(size: f64) -> Result<(), JsValue> {
+    validate_font_size(size)?;
+
     if let Ok(mut s) = APP_STATE.lock() {
         if let Some(idx) = s.selected_index {
             s.shapes[idx].font_size = size;
         }
     }
+    Ok(())
 }
 
 #[wasm_bindgen]
-pub fn resize_canvas(width: f64, height: f64) {
+pub fn resize_canvas(width: f64, height: f64) -> Result<(), JsValue> {
+    validate_canvas_dimensions(width, height)?;
+
     if let Ok(mut s) = APP_STATE.lock() {
         s.canvas_width = width;
         s.canvas_height = height;
     }
+    Ok(())
 }
 
 #[wasm_bindgen]
-pub fn set_selected_text(text: String) {
+pub fn set_selected_text(text: String) -> Result<(), JsValue> {
+    validate_text(&text)?;
+
     if let Ok(mut s) = APP_STATE.lock() {
         if let Some(idx) = s.selected_index {
             s.shapes[idx].text = text;
         }
     }
+    Ok(())
 }
 
 #[wasm_bindgen]
@@ -149,12 +233,15 @@ pub fn get_selected_font_size() -> f64 {
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
-    let window = web_sys::window().unwrap();
-    let document = window.document().unwrap();
-    
+    let window = web_sys::window()
+        .ok_or(AppError::DomOperationFailed { operation: "get window".to_string() })?;
+    let document = window.document()
+        .ok_or(AppError::DomOperationFailed { operation: "get document".to_string() })?;
+
     let canvas = document.get_element_by_id("canvas")
-        .unwrap()
-        .dyn_into::<HtmlCanvasElement>()?;
+        .ok_or(AppError::CanvasNotFound)?
+        .dyn_into::<HtmlCanvasElement>()
+        .map_err(|e| AppError::DomOperationFailed { operation: format!("convert to HtmlCanvasElement: {:?}", e) })?;
 
     let context = canvas
         .get_context("2d")?
@@ -170,7 +257,9 @@ pub fn start() -> Result<(), JsValue> {
         let state = state.clone();
         
         move || {
-            let s = state.lock().unwrap();
+            let s = state.lock().map_err(|_| AppError::StateLockPoisoned)
+                .map_err(|e| JsValue::from(e))
+                .unwrap();
             
             // Sync canvas size if changed
             if canvas.width() as f64 != s.canvas_width || canvas.height() as f64 != s.canvas_height {
@@ -348,8 +437,17 @@ pub fn start() -> Result<(), JsValue> {
             let mouse_y = event.offset_y() as f64;
 
             {
-                let mut s = state.lock().unwrap();
-                
+                let mut s = state.lock().map_err(|_| AppError::StateLockPoisoned)
+                    .map_err(|e| JsValue::from(e))
+                    .unwrap();
+
+                // Validate mouse position
+                if let Err(e) = validate_mouse_position(mouse_x, mouse_y, s.canvas_width, s.canvas_height) {
+                    web_sys::console::log_1(&format!("Warning: {:?}", e).into());
+                    update_status(&e.to_string());
+                    return;
+                }
+
                 // Toolbar Hit Test
                 if mouse_y < TOOLBAR_HEIGHT {
                     let tool_idx = (mouse_x / BUTTON_WIDTH) as usize;
@@ -404,7 +502,9 @@ pub fn start() -> Result<(), JsValue> {
             let mut should_render = false;
 
             {
-                let mut s = state.lock().unwrap();
+                let mut s = state.lock().map_err(|_| AppError::StateLockPoisoned)
+                    .map_err(|e| JsValue::from(e))
+                    .unwrap();
                 if s.is_interacting {
                     let dx = mouse_x - s.current_x;
                     let dy = mouse_y - s.current_y;
@@ -440,7 +540,9 @@ pub fn start() -> Result<(), JsValue> {
         let closure = Closure::<dyn FnMut(_)>::new(move |_event: MouseEvent| {
             let mut should_render = false;
             {
-                let mut s = state.lock().unwrap();
+                let mut s = state.lock().map_err(|_| AppError::StateLockPoisoned)
+                    .map_err(|e| JsValue::from(e))
+                    .unwrap();
                 if s.is_interacting {
                     if s.current_tool != Tool::Select && s.current_tool != Tool::Delete {
                         let new_shape = create_shape_from_interaction(&s);
@@ -466,8 +568,10 @@ pub fn start() -> Result<(), JsValue> {
         let closure = Closure::<dyn FnMut(_)>::new(move |event: KeyboardEvent| {
             let key = event.key();
             if key == "Delete" || key == "Backspace" {
-                state.lock().unwrap().delete_selected();
-                render();
+                if let Ok(mut s) = state.lock() {
+                    s.delete_selected();
+                    render();
+                }
             }
         });
         window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())?;
@@ -496,4 +600,182 @@ pub fn start() -> Result<(), JsValue> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_canvas_dimensions() {
+        // Valid dimensions
+        assert!(validate_canvas_dimensions(800.0, 600.0).is_ok());
+
+        // Too small
+        assert!(validate_canvas_dimensions(50.0, 600.0).is_err());
+        assert!(validate_canvas_dimensions(800.0, 50.0).is_err());
+
+        // Too large
+        assert!(validate_canvas_dimensions(800.0, 20000.0).is_err());
+        assert!(validate_canvas_dimensions(20000.0, 600.0).is_err());
+
+        // NaN values
+        assert!(validate_canvas_dimensions(f64::NAN, 600.0).is_err());
+        assert!(validate_canvas_dimensions(800.0, f64::NAN).is_err());
+    }
+
+    #[test]
+    fn test_validate_font_size() {
+        // Valid sizes
+        assert!(validate_font_size(6.0).is_ok());
+        assert!(validate_font_size(20.0).is_ok());
+        assert!(validate_font_size(72.0).is_ok());
+
+        // Too small
+        assert!(validate_font_size(4.0).is_err());
+
+        // Too large
+        assert!(validate_font_size(100.0).is_err());
+
+        // NaN value
+        assert!(validate_font_size(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn test_validate_color() {
+        // Valid hex colors
+        assert!(validate_color("#ff0000").is_ok());
+        assert!(validate_color("#00FF00").is_ok());
+        assert!(validate_color("#0000FF").is_ok());
+        assert!(validate_color("#123ABC").is_ok());
+
+        // Invalid formats
+        assert!(validate_color("ff0000").is_err()); // Missing #
+        assert!(validate_color("#ff00").is_err()); // Too short
+        assert!(validate_color("#ff00000").is_err()); // Too long
+        assert!(validate_color("#gg0000").is_err()); // Invalid hex character
+        assert!(validate_color("red").is_err()); // Named color not supported
+    }
+
+    #[test]
+    fn test_validate_text() {
+        // Valid text
+        assert!(validate_text("Hello World").is_ok());
+        assert!(validate_text("Text with tabs\t").is_ok());
+        assert!(validate_text("Text\nwith\nlines").is_ok());
+
+        // Text too long
+        let long_text = "a".repeat(1001);
+        assert!(validate_text(&long_text).is_err());
+
+        // Control characters (except common whitespace)
+        assert!(validate_text("Text\x00with\x01control").is_err());
+    }
+
+    #[test]
+    fn test_validate_mouse_position() {
+        // Valid positions
+        assert!(validate_mouse_position(400.0, 300.0, 800.0, 600.0).is_ok());
+        assert!(validate_mouse_position(0.0, 50.0, 800.0, 600.0).is_ok());
+        assert!(validate_mouse_position(800.0, 600.0, 800.0, 600.0).is_ok());
+
+        // Out of bounds
+        assert!(validate_mouse_position(-10.0, 300.0, 800.0, 600.0).is_err());
+        assert!(validate_mouse_position(400.0, 30.0, 800.0, 600.0).is_err()); // In toolbar
+        assert!(validate_mouse_position(400.0, 650.0, 800.0, 600.0).is_err());
+
+        // NaN values
+        assert!(validate_mouse_position(f64::NAN, 300.0, 800.0, 600.0).is_err());
+        assert!(validate_mouse_position(400.0, f64::NAN, 800.0, 600.0).is_err());
+    }
+
+    #[test]
+    fn test_shape_creation() {
+        // Test rectangle creation
+        let rect = Shape {
+            shape_type: ShapeType::Rectangle,
+            x: 10.0,
+            y: 10.0,
+            width: 100.0,
+            height: 50.0,
+            x2: 0.0,
+            y2: 0.0,
+            color: "#ff0000".to_string(),
+            text: "".to_string(),
+            font_size: 20.0,
+        };
+        assert_eq!(rect.shape_type, ShapeType::Rectangle);
+        assert_eq!(rect.x, 10.0);
+        assert_eq!(rect.y, 10.0);
+        assert_eq!(rect.width, 100.0);
+        assert_eq!(rect.height, 50.0);
+        assert_eq!(rect.color, "#ff0000");
+
+        // Test circle creation
+        let circle = Shape {
+            shape_type: ShapeType::Circle,
+            x: 20.0,
+            y: 20.0,
+            width: 80.0,
+            height: 80.0,
+            x2: 0.0,
+            y2: 0.0,
+            color: "#00ff00".to_string(),
+            text: "".to_string(),
+            font_size: 20.0,
+        };
+        assert_eq!(circle.shape_type, ShapeType::Circle);
+
+        // Test line creation
+        let line = Shape {
+            shape_type: ShapeType::Line,
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
+            x2: 100.0,
+            y2: 100.0,
+            color: "#0000ff".to_string(),
+            text: "".to_string(),
+            font_size: 20.0,
+        };
+        assert_eq!(line.shape_type, ShapeType::Line);
+        assert_eq!(line.x2, 100.0);
+        assert_eq!(line.y2, 100.0);
+    }
+
+    #[test]
+    fn test_app_state() {
+        let mut state = AppState::new();
+
+        // Test initial state
+        assert_eq!(state.shapes.len(), 0);
+        assert_eq!(state.current_tool, Tool::Select);
+        assert_eq!(state.selected_index, None);
+        assert_eq!(state.is_interacting, false);
+        assert_eq!(state.canvas_width, 800.0);
+        assert_eq!(state.canvas_height, 600.0);
+
+        // Test delete_selected with no selection
+        state.delete_selected();
+        assert_eq!(state.selected_index, None);
+
+        // Test delete_selected with selection
+        state.shapes.push(Shape {
+            shape_type: ShapeType::Rectangle,
+            x: 0.0,
+            y: 0.0,
+            width: 50.0,
+            height: 50.0,
+            x2: 0.0,
+            y2: 0.0,
+            color: "#ff0000".to_string(),
+            text: "".to_string(),
+            font_size: 20.0,
+        });
+        state.selected_index = Some(0);
+        state.delete_selected();
+        assert_eq!(state.shapes.len(), 0);
+        assert_eq!(state.selected_index, None);
+    }
 }
