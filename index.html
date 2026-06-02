@@ -134,6 +134,9 @@
 
     <div id="status-bar" role="status" aria-live="polite" aria-atomic="true">Ready</div>
 
+    <!-- Screen reader announcements (hidden) -->
+    <div id="sr-announcements" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
     <script type="module">
         import init, {
             set_selected_color,
@@ -189,8 +192,8 @@
             const canvasHeight = document.getElementById('canvasHeight');
             const canvas = document.getElementById('canvas');
 
-            // Color validation
-            colorPicker.addEventListener('input', (e) => {
+            // Color validation - use 'change' event for single-click selection
+            colorPicker.addEventListener('change', (e) => {
                 try {
                     set_selected_color(e.target.value);
                     updateStatus(`Color changed to ${e.target.value}`, "success");
@@ -214,6 +217,21 @@
                         showError(`Invalid text: ${error}`);
                     }
                 }, 300); // Debounce text input
+            });
+
+            // Handle backspace/delete key to prevent errors
+            textInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' || e.key === 'Delete') {
+                    // Allow backspace/delete to work normally
+                    setTimeout(() => {
+                        try {
+                            set_selected_text(textInput.value);
+                        } catch (error) {
+                            // Silently ignore errors for empty text
+                            console.warn('Text input error ignored:', error);
+                        }
+                    }, 0);
+                }
             });
 
             // Font size validation

@@ -15,7 +15,7 @@ pub enum AppError {
     #[error("Invalid font size: {size}. Must be between {min} and {max}")]
     InvalidFontSize { size: f64, min: f64, max: f64 },
 
-    #[error("State lock poisoned")]
+    #[error("State lock poisoned - attempting recovery")]
     StateLockPoisoned,
 
     #[error("DOM operation failed: {operation}")]
@@ -26,6 +26,9 @@ pub enum AppError {
 
     #[error("Invalid text input: {reason}")]
     InvalidText { reason: String },
+
+    #[error("Invalid operation: {operation}. Reason: {reason}")]
+    InvalidOperation { operation: String, reason: String },
 }
 
 impl From<AppError> for JsValue {
