@@ -30,3 +30,6 @@ pub const DEFAULT_CANVAS_HEIGHT: f64 = 600.0;
 
 // Maximum shapes to prevent memory exhaustion
 pub const MAX_SHAPES: usize = 1000;
+
+// Minimum drag distance to create a shape (prevents zero-size shapes on click)
+pub const MIN_SHAPE_SIZE: f64 = 2.0;

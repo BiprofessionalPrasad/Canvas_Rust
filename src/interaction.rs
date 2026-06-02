@@ -105,11 +105,17 @@ pub fn handle_mouse_up(state: &mut AppState) -> Result<bool, crate::errors::AppE
     }
 
     if state.current_tool.creates_shape() {
-        let z_order = state.next_z_order;
-        state.next_z_order += 1;
-        let new_shape = create_shape_from_interaction(state, z_order);
-        state.add_shape(new_shape)?;
-        state.selected_index = Some(state.shapes.len() - 1);
+        let dx = (state.start_x - state.current_x).abs();
+        let dy = (state.start_y - state.current_y).abs();
+        let has_size = dx >= MIN_SHAPE_SIZE || dy >= MIN_SHAPE_SIZE;
+
+        if has_size || state.current_tool == Tool::Text {
+            let z_order = state.next_z_order;
+            state.next_z_order += 1;
+            let new_shape = create_shape_from_interaction(state, z_order);
+            state.add_shape(new_shape)?;
+            state.selected_index = Some(state.shapes.len() - 1);
+        }
     }
 
     state.is_interacting = false;

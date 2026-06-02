@@ -1,53 +1,97 @@
 const puppeteer = require('puppeteer');
 
 (async () => {
-  const browser = await puppeteer.launch({ headless: false });
+  const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
 
-  // Navigate to the app
-  await page.goto('http://localhost:8080');
-  await page.waitForSelector('#canvas');
+  try {
+    await page.goto('http://localhost:8080');
+    await page.waitForSelector('#canvas');
 
-  console.log('Testing rectangle selection...');
+    console.log('Testing shape selection workflow...');
 
-  // Wait for canvas to be ready
-  await new Promise(resolve => setTimeout(resolve, 1000));
+    // Wait for WASM to initialize
+    await page.waitForFunction(() => window.__canvasApp !== undefined, { timeout: 10000 });
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-  // Get the canvas element
-  const canvas = await page.$('#canvas');
+    // Step 1: Draw a rectangle by dragging on the canvas
+    console.log('Drawing a rectangle...');
+    const canvas = await page.$('#canvas');
+    const canvasBox = await canvas.boundingBox();
+    const clickX = canvasBox.x + 300;
+    const clickY = canvasBox.y + 200;
 
-  // Step 1: Create a rectangle
-  console.log('Creating a rectangle...');
-  await page.mouse.move(300, 200);
-  await page.mouse.down();
-  await page.mouse.move(400, 300);
-  await page.mouse.up();
-  await new Promise(resolve => setTimeout(resolve, 100));
+    await page.mouse.move(clickX, clickY);
+    await page.mouse.down();
+    await page.mouse.move(clickX + 100, clickY + 100, { steps: 10 });
+    await page.mouse.up();
+    await new Promise(resolve => setTimeout(resolve, 200));
 
-  // Step 2: Select the Rectangle tool (toolbar button at position 2)
-  console.log('Selecting Select tool...');
-  await page.mouse.click(45, 25); // Click on Select tool (first button)
-  await new Promise(resolve => setTimeout(resolve, 100));
+    // Step 2: Verify rectangle was created by checking selected color
+    const colorAfterDraw = await page.evaluate(() => {
+      try {
+        return window.__canvasApp.get_selected_color();
+      } catch (e) {
+        return 'ERROR: ' + e.message;
+      }
+    });
+    console.log('Color after drawing:', colorAfterDraw);
+    if (colorAfterDraw === '#E0E0E0') {
+      console.log('PASS: Rectangle drawn and selected with default color');
+    } else {
+      console.log('FAIL: Expected #E0E0E0, got', colorAfterDraw);
+    }
 
-  // Step 3: Click on the rectangle we just created
-  console.log('Clicking on the rectangle to select it...');
-  await page.mouse.click(350, 250); // Click inside the rectangle
-  await new Promise(resolve => setTimeout(resolve, 200));
+    // Step 3: Change the color of the selected rectangle
+    await page.evaluate(() => {
+      window.__canvasApp.set_selected_color('#FF0000');
+    });
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-  // Check if anything was selected by examining the canvas
-  const isSelected = await page.evaluate(() => {
-    // Check if there's a selected shape by looking at the state
-    return window.selected_shape !== undefined;
-  });
+    const newColor = await page.evaluate(() => {
+      return window.__canvasApp.get_selected_color();
+    });
+    console.log('Color after change:', newColor);
+    if (newColor === '#ff0000') {
+      console.log('PASS: Color changed to red');
+    } else {
+      console.log('FAIL: Expected #ff0000, got', newColor);
+    }
 
-  console.log('Rectangle selected:', isSelected);
+    // Step 4: Change text on the selected shape (should no-op for rectangle)
+    await page.evaluate(() => {
+      window.__canvasApp.set_selected_text('Hello');
+    });
+    const textAfterSet = await page.evaluate(() => {
+      return window.__canvasApp.get_selected_text();
+    });
+    console.log('Text after setting on rectangle:', textAfterSet || '(empty)');
+    if (textAfterSet === 'Hello') {
+      console.log('PASS: Text set on shape');
+    } else {
+      console.log('INFO: Text on non-text shape returned:', textAfterSet || '(empty)');
+    }
 
-  // Take a screenshot
-  await page.screenshot({ path: 'canvas_test.png' });
-  console.log('Screenshot saved as canvas_test.png');
+    // Step 5: Verify font size getter works
+    const fontSize = await page.evaluate(() => {
+      return window.__canvasApp.get_selected_font_size();
+    });
+    console.log('Font size of selected shape:', fontSize);
+    if (typeof fontSize === 'number' && fontSize > 0) {
+      console.log('PASS: Font size getter works');
+    } else {
+      console.log('FAIL: Unexpected font size:', fontSize);
+    }
 
-  // Keep browser open for manual inspection
-  await new Promise(resolve => setTimeout(resolve, 3000));
+    // Take a screenshot
+    await page.screenshot({ path: 'canvas_test.png' });
+    console.log('Screenshot saved as canvas_test.png');
 
-  await browser.close();
+    console.log('\nAll tests completed.');
+  } catch (error) {
+    console.error('Test failed:', error.message);
+    process.exit(1);
+  } finally {
+    await browser.close();
+  }
 })();

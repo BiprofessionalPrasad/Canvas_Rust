@@ -15,9 +15,6 @@ pub enum AppError {
     #[error("Invalid font size: {size}. Must be between {min} and {max}")]
     InvalidFontSize { size: f64, min: f64, max: f64 },
 
-    #[error("State lock poisoned - attempting recovery")]
-    StateLockPoisoned,
-
     #[error("DOM operation failed: {operation}")]
     DomOperationFailed { operation: String },
 
@@ -29,6 +26,9 @@ pub enum AppError {
 
     #[error("Invalid operation: {operation}. Reason: {reason}")]
     InvalidOperation { operation: String, reason: String },
+
+    #[error("State already borrowed - re-entrant call detected")]
+    StateAlreadyBorrowed,
 }
 
 impl From<AppError> for JsValue {
@@ -43,7 +43,6 @@ pub fn update_status(message: &str) {
             if let Some(status_bar) = document.get_element_by_id("status-bar") {
                 status_bar.set_text_content(Some(message));
             } else {
-                // Fallback to console if status bar doesn't exist yet
                 web_sys::console::log_1(&JsValue::from_str(message));
             }
         }

@@ -185,6 +185,17 @@
                 return;
             }
 
+            // Expose WASM API for programmatic access (testing / debugging)
+            window.__canvasApp = {
+                set_selected_color,
+                set_selected_font_size,
+                set_selected_text,
+                resize_canvas,
+                get_selected_color,
+                get_selected_text,
+                get_selected_font_size,
+            };
+
             const colorPicker = document.getElementById('colorPicker');
             const textInput = document.getElementById('textInput');
             const fontSizeInput = document.getElementById('fontSizeInput');

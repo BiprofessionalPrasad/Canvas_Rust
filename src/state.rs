@@ -1,7 +1,8 @@
 use crate::constants::*;
 use crate::shapes::Shape;
 use crate::tools::Tool;
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Debug)]
 pub struct AppState {
@@ -16,7 +17,7 @@ pub struct AppState {
     pub canvas_width: f64,
     pub canvas_height: f64,
     pub next_z_order: u32,
-    pub dirty_flag: bool, // For efficient rendering
+    pub dirty_flag: bool,
 }
 
 impl AppState {
@@ -139,7 +140,6 @@ impl AppState {
     }
 
     pub fn select_shape_at_position(&mut self, x: f64, y: f64) -> bool {
-        // Search from top to bottom (reverse order for correct z-order)
         for (idx, shape) in self.shapes.iter().enumerate().rev() {
             if crate::interaction::is_point_in_shape(x, y, shape) {
                 self.selected_index = Some(idx);
@@ -157,8 +157,10 @@ impl AppState {
         if let Some(shape) = self.get_selected_shape_mut() {
             shape.x += dx;
             shape.y += dy;
-            shape.x2 += dx;
-            shape.y2 += dy;
+            if shape.shape_type == crate::shapes::ShapeType::Line {
+                shape.x2 += dx;
+                shape.y2 += dy;
+            }
             self.mark_dirty();
             Ok(())
         } else {
@@ -170,15 +172,14 @@ impl AppState {
     }
 }
 
-// Wrapper type to avoid global state
 pub struct App {
-    pub state: Arc<Mutex<AppState>>,
+    state: Rc<RefCell<AppState>>,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
-            state: Arc::new(Mutex::new(AppState::new())),
+            state: Rc::new(RefCell::new(AppState::new())),
         }
     }
 
@@ -186,13 +187,9 @@ impl App {
     where
         F: FnOnce(&mut AppState) -> Result<R, crate::errors::AppError>,
     {
-        match self.state.lock() {
+        match self.state.try_borrow_mut() {
             Ok(mut guard) => f(&mut *guard),
-            Err(poisoned) => {
-                // Handle poisoned mutex
-                let mut guard = poisoned.into_inner();
-                f(&mut *guard)
-            }
+            Err(_) => Err(crate::errors::AppError::StateAlreadyBorrowed),
         }
     }
 }

@@ -11,7 +11,6 @@ use wasm_bindgen::JsCast;
 pub struct Renderer {
     canvas: Rc<HtmlCanvasElement>,
     context: Rc<CanvasRenderingContext2d>,
-    last_rendered_state: Option<usize>, // Simple hash to detect changes
 }
 
 impl Renderer {
@@ -19,16 +18,10 @@ impl Renderer {
         Self {
             canvas: Rc::new(canvas),
             context: Rc::new(context),
-            last_rendered_state: None,
         }
     }
 
-    pub fn render(&mut self, state: &AppState) -> Result<(), crate::errors::AppError> {
-        // Only render if state is dirty or if this is the first render
-        if !state.is_dirty() && self.last_rendered_state.is_some() {
-            return Ok(());
-        }
-
+    pub fn render(&self, state: &AppState) -> Result<(), crate::errors::AppError> {
         // Sync canvas size if changed
         if self.canvas.width() as f64 != state.canvas_width || self.canvas.height() as f64 != state.canvas_height {
             self.canvas.set_width(state.canvas_width as u32);
@@ -43,10 +36,8 @@ impl Renderer {
         indexed_shapes.sort_by_key(|(_, shape)| shape.z_order);
 
         for (original_idx, shape) in indexed_shapes {
-            // Draw the shape
             shape.draw(&self.context)?;
 
-            // Highlight Selection
             if state.selected_index == Some(original_idx) {
                 shape.draw_selection(&self.context)?;
             }
@@ -63,9 +54,6 @@ impl Renderer {
         // Draw Toolbar
         self.draw_toolbar(state)?;
 
-        // Update last rendered state hash
-        self.last_rendered_state = Some(self.calculate_state_hash(state));
-
         Ok(())
     }
 
@@ -79,7 +67,6 @@ impl Renderer {
         for (i, tool) in tools.iter().enumerate() {
             let x = i as f64 * BUTTON_WIDTH;
 
-            // Set button color based on state
             let color = if state.current_tool == *tool {
                 "#18A0FB"
             } else if *tool == Tool::Delete {
@@ -102,58 +89,73 @@ impl Renderer {
 
         Ok(())
     }
-
-    fn calculate_state_hash(&self, state: &AppState) -> usize {
-        // Simple hash to detect state changes
-        // In production, use a proper hashing algorithm
-        let mut hash: usize = 0;
-        hash = hash.wrapping_add(state.shapes.len());
-        hash = hash.wrapping_add(state.selected_index.unwrap_or(0));
-        hash = hash.wrapping_add(state.current_tool as usize);
-        hash = hash.wrapping_add(state.is_interacting as usize);
-        hash = hash.wrapping_add(state.next_z_order as usize);
-        // Add position of selected shape if any
-        if let Some(idx) = state.selected_index {
-            if let Some(shape) = state.shapes.get(idx) {
-                hash = hash.wrapping_add((shape.x as u32) as usize);
-                hash = hash.wrapping_add((shape.y as u32) as usize);
-            }
-        }
-        hash
-    }
 }
 
-// Animation loop with dirty flag optimization
-pub fn start_animation_loop<F>(_renderer: Rc<RefCell<Renderer>>, render_fn: F) -> Result<(), JsValue>
-where
-    F: Fn() -> Result<(), crate::errors::AppError> + 'static,
-{
-    let window = web_sys::window().unwrap();
+// Animation loop that stops when idle, supports re-entrant start
+pub struct AnimationLoop {
+    active: Rc<std::cell::Cell<bool>>,
+    closure: Rc<RefCell<Option<Closure<dyn FnMut()>>>>,
+}
 
-    // Use a closure that can be called recursively
-    let animation_loop = Rc::new(RefCell::new(None::<Closure<dyn FnMut()>>));
-    let animation_loop_clone = animation_loop.clone();
-    let window_clone = window.clone();
+impl AnimationLoop {
+    pub fn new<F>(render_fn: F) -> Self
+    where
+        F: Fn() -> Result<bool, crate::errors::AppError> + 'static,
+    {
+        let active = Rc::new(std::cell::Cell::new(false));
+        let closure: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
 
-    *animation_loop_clone.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        // Execute the render function
-        if let Err(e) = render_fn() {
-            web_sys::console::error_1(&format!("Render error: {:?}", e).into());
+        let closure_weak = Rc::downgrade(&closure);
+        let active_clone = active.clone();
+
+        *closure.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+            if !active_clone.get() {
+                return;
+            }
+
+            match render_fn() {
+                Ok(true) => {
+                    // Rendered successfully, continue loop
+                    if active_clone.get() {
+                        if let Some(closure_rc) = closure_weak.upgrade() {
+                            if let Some(ref c) = *closure_rc.borrow() {
+                                let _ = web_sys::window()
+                                    .and_then(|w| {
+                                        w.request_animation_frame(c.as_ref().unchecked_ref()).ok()
+                                    });
+                            }
+                        }
+                    }
+                }
+                Ok(false) => {
+                    // Nothing to render, stop the loop
+                    active_clone.set(false);
+                }
+                Err(e) => {
+                    web_sys::console::error_1(&format!("Render error: {:?}", e).into());
+                    active_clone.set(false);
+                }
+            }
+        }) as Box<dyn FnMut()>));
+
+        Self { active, closure }
+    }
+
+    pub fn start(&self) {
+        // Set active before scheduling to avoid race
+        self.active.set(true);
+        if let Some(ref c) = *self.closure.borrow() {
+            if let Some(window) = web_sys::window() {
+                let _ = window.request_animation_frame(c.as_ref().unchecked_ref());
+            }
         }
+    }
 
-        // Only request next frame if needed
-        // In this implementation, we check the dirty flag in the render function
-        window_clone.request_animation_frame(
-            animation_loop.borrow().as_ref().unwrap().as_ref().unchecked_ref()
-        ).unwrap();
-    }) as Box<dyn FnMut()>));
+    pub fn stop(&self) {
+        self.active.set(false);
+    }
 
-    window.request_animation_frame(
-        animation_loop_clone.borrow().as_ref().unwrap().as_ref().unchecked_ref()
-    )?;
-
-    // Keep the closure from being garbage collected
-    animation_loop_clone.borrow_mut().take().unwrap().forget();
-
-    Ok(())
+    pub fn is_active(&self) -> bool {
+        self.active.get()
+    }
 }
