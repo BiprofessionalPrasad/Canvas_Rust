@@ -23,13 +23,16 @@ pub fn create_shape_from_interaction(state: &AppState, z_order: u32) -> Shape {
     let width = (state.start_x - state.current_x).abs();
     let height = (state.start_y - state.current_y).abs();
 
-    match state.current_tool {
-        Tool::Rectangle => Shape::new_rectangle(x, y, width, height, DEFAULT_SHAPE_COLOR.to_string(), z_order),
-        Tool::Circle => Shape::new_circle(x, y, width, height, DEFAULT_SHAPE_COLOR.to_string(), z_order),
-        Tool::Line => Shape::new_line(state.start_x, state.start_y, state.current_x, state.current_y, DEFAULT_SHAPE_COLOR.to_string(), z_order),
-        Tool::Text => Shape::new_text(state.start_x, state.start_y, TEXT_DEFAULT.to_string(), DEFAULT_TEXT_COLOR.to_string(), DEFAULT_FONT_SIZE, z_order),
+    let color = &state.default_color;
+    let mut shape = match state.current_tool {
+        Tool::Rectangle => Shape::new_rectangle(x, y, width, height, color.clone(), z_order),
+        Tool::Circle => Shape::new_circle(x, y, width, height, color.clone(), z_order),
+        Tool::Line => Shape::new_line(state.start_x, state.start_y, state.current_x, state.current_y, color.clone(), z_order),
+        Tool::Text => Shape::new_text(state.start_x, state.start_y, TEXT_DEFAULT.to_string(), color.clone(), DEFAULT_FONT_SIZE, z_order),
         _ => unreachable!(),
-    }
+    };
+    shape.outline = state.default_outline;
+    shape
 }
 
 pub fn handle_toolbar_click(x: f64, state: &mut AppState) -> bool {

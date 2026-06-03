@@ -1,4 +1,4 @@
-use crate::constants::*;
+use crate::constants::{DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT, DEFAULT_SHAPE_COLOR, MAX_SHAPES};
 use crate::shapes::Shape;
 use crate::tools::Tool;
 use std::rc::Rc;
@@ -19,9 +19,12 @@ pub struct AppState {
     pub next_z_order: u32,
     pub state_version: u64,
     pub dirty_flag: bool,
+    pub default_outline: bool,
+    pub default_color: String,
 }
 
 impl AppState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             shapes: Vec::new(),
@@ -35,9 +38,11 @@ impl AppState {
             canvas_width: DEFAULT_CANVAS_WIDTH,
             canvas_height: DEFAULT_CANVAS_HEIGHT,
             next_z_order: 0,
-                    state_version: 0,
-                    dirty_flag: true,
-                }
+            state_version: 0,
+            dirty_flag: true,
+            default_outline: false,
+            default_color: DEFAULT_SHAPE_COLOR.to_string(),
+        }
     }
 
     pub fn delete_selected(&mut self) -> Result<(), crate::errors::AppError> {
@@ -173,6 +178,12 @@ impl AppState {
                 reason: "No shape selected".to_string(),
             })
         }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

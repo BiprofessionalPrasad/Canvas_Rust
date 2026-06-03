@@ -45,7 +45,7 @@ impl Renderer {
 
         // Draw Interaction Preview
         if state.is_interacting && state.current_tool.needs_interaction() {
-            self.context.set_stroke_style(&JsValue::from_str(PREVIEW_COLOR));
+            self.context.set_stroke_style_str(PREVIEW_COLOR);
             self.context.set_line_width(1.0);
             let preview_shape = crate::interaction::create_shape_from_interaction(state, state.next_z_order);
             preview_shape.draw(&self.context)?;
@@ -58,7 +58,7 @@ impl Renderer {
     }
 
     fn draw_toolbar(&self, state: &AppState) -> Result<(), crate::errors::AppError> {
-        self.context.set_fill_style(&JsValue::from_str("#333333"));
+        self.context.set_fill_style_str("#333333");
         self.context.fill_rect(0.0, 0.0, state.canvas_width, TOOLBAR_HEIGHT);
 
         let tools = [Tool::Select, Tool::Rectangle, Tool::Circle, Tool::Line, Tool::Text, Tool::Delete];
@@ -75,10 +75,10 @@ impl Renderer {
                 "#444444"
             };
 
-            self.context.set_fill_style(&JsValue::from_str(color));
+            self.context.set_fill_style_str(color);
             self.context.fill_rect(x + 5.0, 5.0, BUTTON_WIDTH - 10.0, TOOLBAR_HEIGHT - 10.0);
 
-            self.context.set_fill_style(&JsValue::from_str("#FFFFFF"));
+            self.context.set_fill_style_str("#FFFFFF");
             self.context.set_font("14px sans-serif");
             self.context
                 .fill_text(labels[i], x + 10.0, 30.0)
@@ -151,11 +151,4 @@ impl AnimationLoop {
         }
     }
 
-    pub fn stop(&self) {
-        self.active.set(false);
-    }
-
-    pub fn is_active(&self) -> bool {
-        self.active.get()
-    }
 }

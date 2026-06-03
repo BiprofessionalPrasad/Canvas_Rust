@@ -34,6 +34,7 @@ pub struct Shape {
     pub text: String,
     pub font_size: f64,
     pub z_order: u32,
+    pub outline: bool,
 }
 
 impl Shape {
@@ -49,6 +50,7 @@ impl Shape {
             color,
             text: String::new(),
             font_size: crate::constants::DEFAULT_FONT_SIZE,
+            outline: false,
             z_order,
         }
     }
@@ -65,6 +67,7 @@ impl Shape {
             color,
             text: String::new(),
             font_size: crate::constants::DEFAULT_FONT_SIZE,
+            outline: false,
             z_order,
         }
     }
@@ -81,6 +84,7 @@ impl Shape {
             color,
             text: String::new(),
             font_size: crate::constants::DEFAULT_FONT_SIZE,
+            outline: false,
             z_order,
         }
     }
@@ -97,18 +101,21 @@ impl Shape {
             color,
             text,
             font_size,
+            outline: false,
             z_order,
         }
     }
 
     pub fn draw(&self, context: &CanvasRenderingContext2d) -> Result<(), crate::errors::AppError> {
-        context.set_fill_style(&JsValue::from_str(&self.color));
-        context.set_stroke_style(&JsValue::from_str(&self.color));
+        context.set_fill_style_str(&self.color);
+        context.set_stroke_style_str(&self.color);
         context.set_line_width(2.0);
 
         match self.shape_type {
             ShapeType::Rectangle => {
-                context.fill_rect(self.x, self.y, self.width, self.height);
+                if !self.outline {
+                    context.fill_rect(self.x, self.y, self.width, self.height);
+                }
                 context.stroke_rect(self.x, self.y, self.width, self.height);
             }
             ShapeType::Circle => {
@@ -120,7 +127,9 @@ impl Shape {
                     .map_err(|e| crate::errors::AppError::DomOperationFailed {
                         operation: format!("arc: {:?}", e),
                     })?;
-                context.fill();
+                if !self.outline {
+                    context.fill();
+                }
                 context.stroke();
             }
             ShapeType::Line => {
@@ -145,7 +154,7 @@ impl Shape {
     pub fn draw_selection(&self, context: &CanvasRenderingContext2d) -> Result<(), crate::errors::AppError> {
         use crate::constants::*;
 
-        context.set_stroke_style(&JsValue::from_str(SELECTION_COLOR));
+        context.set_stroke_style_str(SELECTION_COLOR);
         context.set_line_width(2.0);
         context
             .set_line_dash(&JsValue::from(js_sys::Array::of2(

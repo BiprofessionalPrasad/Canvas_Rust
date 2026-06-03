@@ -88,6 +88,27 @@
             outline: 3px solid #4a90e2;
             outline-offset: 2px;
         }
+
+        .swatch {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            border: 2px solid #555;
+            transition: transform 0.1s, border-color 0.1s;
+            vertical-align: middle;
+        }
+
+        .swatch:hover {
+            transform: scale(1.2);
+            border-color: #fff;
+        }
+
+        .swatch.active {
+            border-color: #4a90e2;
+            box-shadow: 0 0 4px #4a90e2;
+        }
     </style>
 </head>
 <body>
@@ -109,6 +130,19 @@
                     <label for="fontSizeInput">Font Size:</label>
                     <input type="number" id="fontSizeInput" value="20" min="6" max="72" style="width: 70px;" aria-describedby="font-desc">
                     <span id="font-desc" class="sr-only">Font size in pixels (6-72)</span>
+                </div>
+                <div>
+                    <label for="outlineCheck">Outline:</label>
+                    <input type="checkbox" id="outlineCheck" aria-describedby="outline-desc">
+                    <span id="outline-desc" class="sr-only">Draw shapes as outlines only (no fill)</span>
+                </div>
+                <div style="display: flex; gap: 4px; align-items: center;">
+                    <span style="margin-right: 4px;">Palette:</span>
+                    <span id="palette"></span>
+                    <button id="addToPalette" title="Add current color to palette" style="background: #555; color: #fff; border: none; border-radius: 3px; cursor: pointer; padding: 2px 8px; font-size: 14px;">+</button>
+                </div>
+                <div>
+                    <button id="saveBtn" title="Save canvas as PNG" style="background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 4px 12px;">Save PNG</button>
                 </div>
                 <div style="margin-left: 20px;">
                     <span style="margin-right: 10px;">Canvas: </span>
@@ -143,6 +177,8 @@
             set_selected_font_size,
             set_selected_text,
             resize_canvas,
+            set_outline_mode,
+            get_outline_mode,
             get_selected_color,
             get_selected_text,
             get_selected_font_size
@@ -191,6 +227,8 @@
                 set_selected_font_size,
                 set_selected_text,
                 resize_canvas,
+                set_outline_mode,
+                get_outline_mode,
                 get_selected_color,
                 get_selected_text,
                 get_selected_font_size,
@@ -199,6 +237,10 @@
             const colorPicker = document.getElementById('colorPicker');
             const textInput = document.getElementById('textInput');
             const fontSizeInput = document.getElementById('fontSizeInput');
+            const outlineCheck = document.getElementById('outlineCheck');
+            const paletteEl = document.getElementById('palette');
+            const addToPaletteBtn = document.getElementById('addToPalette');
+            const saveBtn = document.getElementById('saveBtn');
             const canvasWidth = document.getElementById('canvasWidth');
             const canvasHeight = document.getElementById('canvasHeight');
             const canvas = document.getElementById('canvas');
@@ -263,6 +305,90 @@
                 }
             });
 
+            // Outline mode toggle
+            outlineCheck.addEventListener('change', (e) => {
+                try {
+                    set_outline_mode(e.target.checked);
+                    const mode = e.target.checked ? 'outline' : 'filled';
+                    updateStatus(`Shape mode set to ${mode}`, 'success');
+                } catch (error) {
+                    showError(`Failed to set outline mode: ${error}`);
+                }
+            });
+
+            // Color palette with localStorage persistence
+            const STORAGE_KEY = 'canvas_rust_palette';
+            const DEFAULT_PALETTE = [
+                '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
+                '#FF6600', '#FF0066', '#66FF00', '#0066FF', '#6600FF', '#FFCC00',
+                '#FFFFFF', '#CCCCCC', '#888888', '#444444', '#000000',
+            ];
+
+            function loadPalette() {
+                try {
+                    const stored = localStorage.getItem(STORAGE_KEY);
+                    if (stored) return JSON.parse(stored);
+                } catch (_) {}
+                return DEFAULT_PALETTE;
+            }
+
+            function savePalette(colors) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(colors));
+                } catch (_) {}
+            }
+
+            function renderPalette() {
+                const colors = loadPalette();
+                paletteEl.innerHTML = colors.map(c =>
+                    `<span class="swatch" style="background:${c};" data-color="${c}" role="button" tabindex="0" aria-label="Color ${c}"></span>`
+                ).join('');
+
+                paletteEl.querySelectorAll('.swatch').forEach(el => {
+                    el.addEventListener('click', () => {
+                        set_selected_color(el.dataset.color);
+                        syncControls();
+                    });
+                    el.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            set_selected_color(el.dataset.color);
+                            syncControls();
+                        }
+                    });
+                });
+            }
+
+            addToPaletteBtn.addEventListener('click', () => {
+                const current = get_selected_color();
+                const colors = loadPalette();
+                if (!colors.includes(current)) {
+                    colors.push(current);
+                    savePalette(colors);
+                    renderPalette();
+                    updateStatus(`Added ${current} to palette`, 'success');
+                } else {
+                    updateStatus(`${current} already in palette`, 'normal');
+                }
+            });
+
+            renderPalette();
+
+            // Save canvas as PNG
+            saveBtn.addEventListener('click', () => {
+                try {
+                    const dataUrl = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.download = `canvas-${Date.now()}.png`;
+                    link.href = dataUrl;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    updateStatus('Canvas saved as PNG', 'success');
+                } catch (error) {
+                    showError(`Failed to save: ${error}`);
+                }
+            });
+
             // Canvas dimension validation
             const updateCanvasSize = () => {
                 const width = parseFloat(canvasWidth.value);
@@ -289,6 +415,7 @@
                     colorPicker.value = get_selected_color();
                     textInput.value = get_selected_text();
                     fontSizeInput.value = get_selected_font_size();
+                    outlineCheck.checked = get_outline_mode();
                 } catch (error) {
                     console.warn("Failed to sync controls:", error);
                 }

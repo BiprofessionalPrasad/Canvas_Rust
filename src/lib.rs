@@ -39,12 +39,13 @@ pub fn set_selected_color(color: String) -> Result<(), JsValue> {
     validate_color(&color)?;
 
     get_app().with_state(|state| {
+        state.default_color = color.clone();
         if let Some(idx) = state.selected_index {
             if let Some(shape) = state.shapes.get_mut(idx) {
                 shape.color = color;
-                state.mark_dirty();
             }
         }
+        state.mark_dirty();
         Ok(())
     })?;
 
@@ -104,8 +105,8 @@ pub fn get_selected_color() -> String {
     get_app().with_state(|state| {
         Ok(state.get_selected_shape()
             .map(|s| s.color.clone())
-            .unwrap_or_else(|| "#E0E0E0".to_string()))
-    }).unwrap_or_else(|_| "#E0E0E0".to_string())
+            .unwrap_or_else(|| state.default_color.clone()))
+    }).unwrap_or_else(|_| constants::DEFAULT_SHAPE_COLOR.to_string())
 }
 
 #[wasm_bindgen]
@@ -115,6 +116,28 @@ pub fn get_selected_text() -> String {
             .map(|s| s.text.clone())
             .unwrap_or_else(|| "".to_string()))
     }).unwrap_or_else(|_| "".to_string())
+}
+
+#[wasm_bindgen]
+pub fn set_outline_mode(outline: bool) -> Result<(), JsValue> {
+    get_app().with_state(|state| {
+        state.default_outline = outline;
+        if let Some(shape) = state.get_selected_shape_mut() {
+            shape.outline = outline;
+        }
+        state.mark_dirty();
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[wasm_bindgen]
+pub fn get_outline_mode() -> bool {
+    get_app().with_state(|state| {
+        Ok(state.get_selected_shape()
+            .map(|s| s.outline)
+            .unwrap_or(state.default_outline))
+    }).unwrap_or(false)
 }
 
 #[wasm_bindgen]

@@ -8,7 +8,6 @@ pub const LINE_PICK_DISTANCE: f64 = 5.0;
 pub const PREVIEW_COLOR: &str = "rgba(24, 160, 251, 0.5)";
 pub const SELECTION_COLOR: &str = "#18A0FB";
 pub const DEFAULT_SHAPE_COLOR: &str = "#E0E0E0";
-pub const DEFAULT_TEXT_COLOR: &str = "#FFFFFF";
 pub const TEXT_DEFAULT: &str = "Text";
 pub const DEFAULT_TEXT_WIDTH: f64 = 100.0;
 pub const DEFAULT_TEXT_HEIGHT: f64 = 30.0;
