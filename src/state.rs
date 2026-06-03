@@ -17,6 +17,7 @@ pub struct AppState {
     pub canvas_width: f64,
     pub canvas_height: f64,
     pub next_z_order: u32,
+    pub state_version: u64,
     pub dirty_flag: bool,
 }
 
@@ -34,8 +35,9 @@ impl AppState {
             canvas_width: DEFAULT_CANVAS_WIDTH,
             canvas_height: DEFAULT_CANVAS_HEIGHT,
             next_z_order: 0,
-            dirty_flag: true,
-        }
+                    state_version: 0,
+                    dirty_flag: true,
+                }
     }
 
     pub fn delete_selected(&mut self) -> Result<(), crate::errors::AppError> {
@@ -85,7 +87,9 @@ impl AppState {
 
     pub fn mark_dirty(&mut self) {
         self.dirty_flag = true;
-    }
+            // Increment the version so renderers can detect changes reliably
+            self.state_version = self.state_version.wrapping_add(1);
+        }
 
     pub fn clear_dirty(&mut self) {
         self.dirty_flag = false;
