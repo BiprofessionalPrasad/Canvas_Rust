@@ -21,7 +21,7 @@ pub use tools::Tool;
 pub use validation::*;
 
 thread_local! {
-    static APP_INSTANCE: RefCell<Option<Rc<App>>> = RefCell::new(None);
+    static APP_INSTANCE: RefCell<Option<Rc<App>>> = const { RefCell::new(None) };
 }
 
 fn get_app() -> Rc<App> {

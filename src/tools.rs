@@ -11,6 +11,8 @@ pub enum Tool {
 }
 
 impl Tool {
+    #[inline]
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Tool::Select => "Select",
@@ -22,10 +24,14 @@ impl Tool {
         }
     }
 
+    #[inline]
+    #[must_use]
     pub fn creates_shape(&self) -> bool {
         matches!(self, Tool::Rectangle | Tool::Circle | Tool::Line | Tool::Text)
     }
 
+    #[inline]
+    #[must_use]
     pub fn needs_interaction(&self) -> bool {
         !matches!(self, Tool::Select | Tool::Delete)
     }

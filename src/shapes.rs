@@ -11,6 +11,8 @@ pub enum ShapeType {
 }
 
 impl ShapeType {
+    #[inline]
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             ShapeType::Rectangle => "Rectangle",
@@ -38,6 +40,7 @@ pub struct Shape {
 }
 
 impl Shape {
+    #[must_use]
     pub fn new_rectangle(x: f64, y: f64, width: f64, height: f64, color: String, z_order: u32) -> Self {
         Self {
             shape_type: ShapeType::Rectangle,
@@ -55,6 +58,7 @@ impl Shape {
         }
     }
 
+    #[must_use]
     pub fn new_circle(x: f64, y: f64, width: f64, height: f64, color: String, z_order: u32) -> Self {
         Self {
             shape_type: ShapeType::Circle,
@@ -72,6 +76,7 @@ impl Shape {
         }
     }
 
+    #[must_use]
     pub fn new_line(x1: f64, y1: f64, x2: f64, y2: f64, color: String, z_order: u32) -> Self {
         Self {
             shape_type: ShapeType::Line,
@@ -89,6 +94,7 @@ impl Shape {
         }
     }
 
+    #[must_use]
     pub fn new_text(x: f64, y: f64, text: String, color: String, font_size: f64, z_order: u32) -> Self {
         Self {
             shape_type: ShapeType::Text,
@@ -190,6 +196,8 @@ impl Shape {
         Ok(())
     }
 
+    #[inline]
+    #[must_use]
     pub fn contains_point(&self, x: f64, y: f64) -> bool {
         match self.shape_type {
             ShapeType::Line => {

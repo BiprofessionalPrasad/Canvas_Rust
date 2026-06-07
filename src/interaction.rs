@@ -13,7 +13,7 @@ pub fn dist_to_segment(px: f64, py: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> 
         return ((px - x1).powi(2) + (py - y1).powi(2)).sqrt();
     }
     let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
-    let t = t.max(0.0).min(1.0);
+    let t = t.clamp(0.0, 1.0);
     ((px - (x1 + t * (x2 - x1))).powi(2) + (py - (y1 + t * (y2 - y1))).powi(2)).sqrt()
 }
 
@@ -169,7 +169,7 @@ fn announce_to_screen_reader(message: &str) {
                 Some(element) => element,
                 None => {
                     if let Ok(element) = document.create_element("div") {
-                        let _ = element.set_id("sr-announcements");
+                        element.set_id("sr-announcements");
                         let _ = element.set_attribute("aria-live", "polite");
                         let _ = element.set_attribute("aria-atomic", "true");
                         let _ = element.set_attribute("style", "position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden;");

@@ -8,6 +8,8 @@ use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
+type AnimationClosure = Rc<RefCell<Option<Closure<dyn FnMut()>>>>;
+
 pub struct Renderer {
     canvas: Rc<HtmlCanvasElement>,
     context: Rc<CanvasRenderingContext2d>,
@@ -94,7 +96,7 @@ impl Renderer {
 // Animation loop that stops when idle, supports re-entrant start
 pub struct AnimationLoop {
     active: Rc<std::cell::Cell<bool>>,
-    closure: Rc<RefCell<Option<Closure<dyn FnMut()>>>>,
+    closure: AnimationClosure,
 }
 
 impl AnimationLoop {
@@ -103,7 +105,7 @@ impl AnimationLoop {
         F: Fn() -> Result<bool, crate::errors::AppError> + 'static,
     {
         let active = Rc::new(std::cell::Cell::new(false));
-        let closure: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
+        let closure: AnimationClosure = Rc::new(RefCell::new(None));
 
         let closure_weak = Rc::downgrade(&closure);
         let active_clone = active.clone();

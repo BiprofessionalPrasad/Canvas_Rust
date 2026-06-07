@@ -92,9 +92,8 @@ impl AppState {
 
     pub fn mark_dirty(&mut self) {
         self.dirty_flag = true;
-            // Increment the version so renderers can detect changes reliably
-            self.state_version = self.state_version.wrapping_add(1);
-        }
+        self.state_version = self.state_version.wrapping_add(1);
+    }
 
     pub fn clear_dirty(&mut self) {
         self.dirty_flag = false;
@@ -181,6 +180,12 @@ impl AppState {
     }
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Default for AppState {
     fn default() -> Self {
         Self::new()
@@ -192,6 +197,7 @@ pub struct App {
 }
 
 impl App {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state: Rc::new(RefCell::new(AppState::new())),
@@ -203,7 +209,7 @@ impl App {
         F: FnOnce(&mut AppState) -> Result<R, crate::errors::AppError>,
     {
         match self.state.try_borrow_mut() {
-            Ok(mut guard) => f(&mut *guard),
+            Ok(mut guard) => f(&mut guard),
             Err(_) => Err(crate::errors::AppError::StateAlreadyBorrowed),
         }
     }
